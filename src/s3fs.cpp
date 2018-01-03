@@ -2463,98 +2463,105 @@ static int s3fs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off
 
 static int list_bucket(const char* path, S3ObjList& head, const char* delimiter, bool check_content_only)
 {
-  // int       result; 
-  // string    s3_realpath;
-  // string    query_delimiter;;
-  // string    query_prefix;;
-  // string    query_maxkey;;
-  // string    next_marker = "";
-  // bool      truncated = true;
-  // S3fsCurl  s3fscurl;
-  // xmlDocPtr doc;
-  // BodyData* body;
+  int       result; 
+  string    s3_realpath;
+  string    query_delimiter;;
+  string    query_prefix;;
+  string    query_maxkey;;
+  string    next_marker = "";
+  bool      truncated = true;
+  S3fsCurl  s3fscurl;
+  xmlDocPtr doc;
+  BodyData* body;
+  string root_path = "/";
 
-  // S3FS_PRN_INFO1("[path=%s]", path);
+  S3FS_PRN_INFO1("[path=%s]", path);
+  s3_realpath = get_realpath(path);
 
-  // if(delimiter && 0 < strlen(delimiter)){
-  //   query_delimiter += "delimiter=";
-  //   query_delimiter += delimiter;
-  //   query_delimiter += "&";
-  // }
+  if (root_path.compare(s3_realpath) != 0) {
+    // Allow to list only the root directory
+    // The nested directories should be listed as empty
+    return 0;
+  }
 
-  // query_prefix += "&prefix=";
-  // s3_realpath = get_realpath(path);
-  // if(0 == s3_realpath.length() || '/' != s3_realpath[s3_realpath.length() - 1]){
-  //   // last word must be "/"
-  //   query_prefix += urlEncode(s3_realpath.substr(1) + "/");
-  // }else{
-  //   query_prefix += urlEncode(s3_realpath.substr(1));
-  // }
-  // if (check_content_only){
-  //   // Just need to know if there are child objects in dir
-  //   // For dir with children, expect "dir/" and "dir/child"
-  //   query_maxkey += "max-keys=2";
-  // }else{
-  //   query_maxkey += "max-keys=1000";
-  // }
+  if(delimiter && 0 < strlen(delimiter)){
+    query_delimiter += "delimiter=";
+    query_delimiter += delimiter;
+    query_delimiter += "&";
+  }
 
-  // while(truncated){
-  //   string each_query = query_delimiter;
-  //   if(next_marker != ""){
-  //     each_query += "marker=" + urlEncode(next_marker) + "&";
-  //     next_marker = "";
-  //   }
-  //   each_query += query_maxkey;
-  //   each_query += query_prefix;
+  query_prefix += "&prefix=";
+  if(0 == s3_realpath.length() || '/' != s3_realpath[s3_realpath.length() - 1]){
+    // last word must be "/"
+    query_prefix += urlEncode(s3_realpath.substr(1) + "/");
+  }else{
+    query_prefix += urlEncode(s3_realpath.substr(1));
+  }
+  if (check_content_only){
+    // Just need to know if there are child objects in dir
+    // For dir with children, expect "dir/" and "dir/child"
+    query_maxkey += "max-keys=2";
+  }else{
+    query_maxkey += "max-keys=1000";
+  }
 
-  //   // request
-  //   if(0 != (result = s3fscurl.ListBucketRequest(path, each_query.c_str()))){
-  //     S3FS_PRN_ERR("ListBucketRequest returns with error.");
-  //     return result;
-  //   }
-  //   body = s3fscurl.GetBodyData();
+  while(truncated){
+    string each_query = query_delimiter;
+    if(next_marker != ""){
+      each_query += "marker=" + urlEncode(next_marker) + "&";
+      next_marker = "";
+    }
+    each_query += query_maxkey;
+    each_query += query_prefix;
 
-  //   // xmlDocPtr
-  //   if(NULL == (doc = xmlReadMemory(body->str(), static_cast<int>(body->size()), "", NULL, 0))){
-  //     S3FS_PRN_ERR("xmlReadMemory returns with error.");
-  //     return -1;
-  //   }
-  //   if(0 != append_objects_from_xml(path, doc, head)){
-  //     S3FS_PRN_ERR("append_objects_from_xml returns with error.");
-  //     xmlFreeDoc(doc);
-  //     return -1;
-  //   }
-  //   if(true == (truncated = is_truncated(doc))){
-  //     xmlChar*	tmpch = get_next_marker(doc);
-  //     if(tmpch){
-  //       next_marker = (char*)tmpch;
-  //       xmlFree(tmpch);
-  //     }else{
-  //       // If did not specify "delimiter", s3 did not return "NextMarker".
-  //       // On this case, can use last name for next marker.
-  //       //
-  //       string lastname;
-  //       if(!head.GetLastName(lastname)){
-  //         S3FS_PRN_WARN("Could not find next marker, thus break loop.");
-  //         truncated = false;
-  //       }else{
-  //         next_marker = s3_realpath.substr(1);
-  //         if(0 == s3_realpath.length() || '/' != s3_realpath[s3_realpath.length() - 1]){
-  //           next_marker += "/";
-  //         }
-  //         next_marker += lastname;
-  //       }
-  //     }
-  //   }
-  //   S3FS_XMLFREEDOC(doc);
+    // request
+    if(0 != (result = s3fscurl.ListBucketRequest(path, each_query.c_str()))){
+      S3FS_PRN_ERR("ListBucketRequest returns with error.");
+      return result;
+    }
+    body = s3fscurl.GetBodyData();
 
-  //   // reset(initialize) curl object
-  //   s3fscurl.DestroyCurlHandle();
+    // xmlDocPtr
+    if(NULL == (doc = xmlReadMemory(body->str(), static_cast<int>(body->size()), "", NULL, 0))){
+      S3FS_PRN_ERR("xmlReadMemory returns with error.");
+      return -1;
+    }
+    if(0 != append_objects_from_xml(path, doc, head)){
+      S3FS_PRN_ERR("append_objects_from_xml returns with error.");
+      xmlFreeDoc(doc);
+      return -1;
+    }
+    if(true == (truncated = is_truncated(doc))){
+      xmlChar*	tmpch = get_next_marker(doc);
+      if(tmpch){
+        next_marker = (char*)tmpch;
+        xmlFree(tmpch);
+      }else{
+        // If did not specify "delimiter", s3 did not return "NextMarker".
+        // On this case, can use last name for next marker.
+        //
+        string lastname;
+        if(!head.GetLastName(lastname)){
+          S3FS_PRN_WARN("Could not find next marker, thus break loop.");
+          truncated = false;
+        }else{
+          next_marker = s3_realpath.substr(1);
+          if(0 == s3_realpath.length() || '/' != s3_realpath[s3_realpath.length() - 1]){
+            next_marker += "/";
+          }
+          next_marker += lastname;
+        }
+      }
+    }
+    S3FS_XMLFREEDOC(doc);
 
-  //   if (check_content_only)
-  //     break;
-  // }
-  // S3FS_MALLOCTRIM(0);
+    // reset(initialize) curl object
+    s3fscurl.DestroyCurlHandle();
+
+    if (check_content_only)
+      break;
+  }
+  S3FS_MALLOCTRIM(0);
 
   return 0;
 }

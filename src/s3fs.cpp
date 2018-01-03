@@ -2473,7 +2473,7 @@ static int list_bucket(const char* path, S3ObjList& head, const char* delimiter,
   S3fsCurl  s3fscurl;
   xmlDocPtr doc;
   BodyData* body;
-  string root_path = "/";
+  string root_path = "";
 
   S3FS_PRN_INFO1("[path=%s]", path);
   s3_realpath = get_realpath(path);

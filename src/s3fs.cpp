@@ -2473,8 +2473,16 @@ static int list_bucket(const char* path, S3ObjList& head, const char* delimiter,
   S3fsCurl  s3fscurl;
   xmlDocPtr doc;
   BodyData* body;
+  string root_path = "";
 
   S3FS_PRN_INFO1("[path=%s]", path);
+  s3_realpath = get_realpath(path);
+
+  if (root_path.compare(s3_realpath) != 0) {
+    // Allow to list only the root directory
+    // The nested directories should be listed as empty
+    return 0;
+  }
 
   if(delimiter && 0 < strlen(delimiter)){
     query_delimiter += "delimiter=";
@@ -2483,7 +2491,6 @@ static int list_bucket(const char* path, S3ObjList& head, const char* delimiter,
   }
 
   query_prefix += "&prefix=";
-  s3_realpath = get_realpath(path);
   if(0 == s3_realpath.length() || '/' != s3_realpath[s3_realpath.length() - 1]){
     // last word must be "/"
     query_prefix += urlEncode(s3_realpath.substr(1) + "/");
